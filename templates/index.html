@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALTCHA Test Form</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+        form { display: flex; flex-direction: column; }
+        label { margin-top: 10px; }
+        button { margin-top: 20px; }
+        #altcha-status { color: gray; }
+    </style>
+</head>
+<body>
+    <h1>ALTCHA-Protected Form</h1>
+    <p>This form uses a simple proof-of-work CAPTCHA alternative (ALTCHA-like) to prevent spam.</p>
+    
+    <form id="test-form" action="/submit" method="POST">
+        <label for="name">Your Name:</label>
+        <input type="text" id="name" name="name" required>
+        
+        <!-- Hidden ALTCHA field -->
+        <input type="hidden" id="altcha" name="altcha">
+        
+        <div id="altcha-status">Loading challenge...</div>
+        
+        <button type="submit" disabled>Submit</button>
+    </form>
+
+    <script>
+        // Simple ALTCHA client implementation
+        async function solveAltcha() {
+            const status = document.getElementById('altcha-status');
+            const altchaInput = document.getElementById('altcha');
+            const submitBtn = document.querySelector('button[type="submit"]');
+            
+            status.textContent = 'Fetching challenge...';
+            
+            // Get challenge from server
+            const response = await fetch('/challenge');
+            if (!response.ok) {
+                status.textContent = 'Error fetching challenge';
+                return;
+            }
+            const challengeData = await response.json();
+            
+            status.textContent = 'Solving challenge (this may take a moment)...';
+            
+            // Solve proof-of-work
+            let number = 0;
+            const maxnumber = challengeData.maxnumber || 1000000;
+            while (number <= maxnumber) {
+                // Compute SHA-256(salt + number)
+                const encoder = new TextEncoder();
+                const data = encoder.encode(challengeData.salt + number.toString());
+                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                if (hashHex === challengeData.challenge) {
+                    // Found it!
+                    const payload = {
+                        algorithm: challengeData.algorithm,
+                        challenge: challengeData.challenge,
+                        number: number,
+                        salt: challengeData.salt,
+                        signature: challengeData.signature
+                    };
+                    altchaInput.value = btoa(JSON.stringify(payload));
+                    status.textContent = 'Challenge solved!';
+                    submitBtn.disabled = false;
+                    return;
+                }
+                number++;
+            }
+            status.textContent = 'Failed to solve challenge (max reached)';
+        }
+        
+        // Run on load
+        window.addEventListener('load', solveAltcha);
+    </script>
+</body>
+</html>
