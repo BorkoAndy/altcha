@@ -17,9 +17,18 @@ app = FastAPI(
 
 templates = Jinja2Templates(directory="templates")
 
-# TESTING ONLY: Random HMAC key on startup (changes on restart!)
-HMAC_KEY = secrets.token_bytes(32)
-print("WARNING: Using random HMAC_KEY (testing only). Set ALTCHA_HMAC_KEY env var for production.")
+import os
+
+# Require HMAC key from env var (no fallback in production)
+HMAC_KEY_HEX = os.getenv("ALTCHA_HMAC_KEY")
+if not HMAC_KEY_HEX:
+    raise ValueError("ALTCHA_HMAC_KEY environment variable must be set!")
+
+# Convert hex string to bytes
+try:
+    HMAC_KEY = bytes.fromhex(HMAC_KEY_HEX)
+except ValueError:
+    raise ValueError("ALTCHA_HMAC_KEY must be a valid hex string")
 
 # Config (hardcoded for simple testing)
 MAXNUMBER = 100000  # ~0.1–0.5 sec solve time on modern browsers
